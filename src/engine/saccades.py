@@ -3,6 +3,7 @@ from pyglet.window import key
 import random
 from src.ui.displays import GameState, doctor_window, patient_window
 from src.ui import config_screen
+from src.engine.arrows import load_arrow_images
 
 doctor_window.switch_to()
 doc_label = pyglet.text.Label('Saccades Mode Active - Monitoring Patient', x=400, y=300, anchor_x='center')
@@ -23,6 +24,7 @@ LEFT_BOX_X = 200
 RIGHT_BOX_X = 600
 BOX_Y = 300
 BOX_SIZE = 100
+ARROW_SCALE = 0.6  # 128px images drawn at ~77px to fit inside the 100px boxes
 TARGET_TIMEOUT = 2.0   # Seconds the arrow stays visible before counting as a miss
 GAP_DURATION = 0.5     # Seconds of blank screen between targets
 
@@ -42,12 +44,13 @@ VALID_DIRECTIONS = [key.UP, key.DOWN, key.LEFT, key.RIGHT]
 current_direction = key.UP
 
 patient_window.switch_to()
+ARROW_IMAGES = load_arrow_images()
 left_box = pyglet.shapes.Rectangle(x=LEFT_BOX_X - BOX_SIZE // 2, y=BOX_Y - BOX_SIZE // 2,
                                    width=BOX_SIZE, height=BOX_SIZE, color=(100, 100, 100))
 right_box = pyglet.shapes.Rectangle(x=RIGHT_BOX_X - BOX_SIZE // 2, y=BOX_Y - BOX_SIZE // 2,
                                     width=BOX_SIZE, height=BOX_SIZE, color=(100, 100, 100))
-arrow_label = pyglet.text.Label('UP', font_size=20, x=LEFT_BOX_X, y=BOX_Y,
-                                anchor_x='center', anchor_y='center', color=(255, 255, 0, 255))
+arrow_sprite = pyglet.sprite.Sprite(ARROW_IMAGES[key.UP], x=LEFT_BOX_X, y=BOX_Y)
+arrow_sprite.scale = ARROW_SCALE
 
 def get_average_reaction():
     return sum(reaction_times) / len(reaction_times) if reaction_times else 0.0
@@ -72,8 +75,8 @@ def show_next_target():
     target_elapsed = 0.0
 
     patient_window.switch_to()
-    arrow_label.text = key.symbol_string(current_direction)
-    arrow_label.x = LEFT_BOX_X if target_side == "LEFT" else RIGHT_BOX_X
+    arrow_sprite.image = ARROW_IMAGES[current_direction]
+    arrow_sprite.x = LEFT_BOX_X if target_side == "LEFT" else RIGHT_BOX_X
 
 def end_target():
     # Hide the arrow and begin the blank gap before the next one appears
@@ -164,7 +167,7 @@ def draw_patient():
     right_box.draw()
 
     if target_visible:
-        arrow_label.draw()
+        arrow_sprite.draw()
 
 def handle_patient_input(symbol):
     global score, total_attempts, total_hits, streak

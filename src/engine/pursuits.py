@@ -3,6 +3,7 @@ from pyglet.window import key
 import random
 from src.ui.displays import GameState, doctor_window, patient_window
 from src.ui import config_screen
+from src.engine.arrows import load_arrow_images
 
 doctor_window.switch_to()
 doc_label = pyglet.text.Label('Pursuits Mode Active - Monitoring Patient', x=400, y=300, anchor_x='center')
@@ -21,6 +22,7 @@ timer_label = pyglet.text.Label('Time: 60', font_size=18, x=750, y=500, anchor_x
 hitbox_y = 450
 arrow_y = 0
 arrow_speed = 400 
+ARROW_SCALE = 0.5  # 128px images drawn at 64px to fit the 60px hitbox
 score = 0
 streak = 0
 total_attempts = 0
@@ -32,9 +34,10 @@ VALID_DIRECTIONS = [key.UP, key.DOWN, key.LEFT, key.RIGHT]
 current_direction = key.UP
 
 patient_window.switch_to()
+ARROW_IMAGES = load_arrow_images()
 hitbox_rect = pyglet.shapes.Rectangle(x=370, y=hitbox_y - 30, width=60, height=60, color=(100, 100, 100))
-arrow_label = pyglet.text.Label('UP', font_size=20, x=400, y=arrow_y, 
-                                anchor_x='center', anchor_y='center', color=(255, 255, 0, 255))
+arrow_sprite = pyglet.sprite.Sprite(ARROW_IMAGES[key.UP], x=400, y=arrow_y)
+arrow_sprite.scale = ARROW_SCALE
 
 def reset_arrow():
     global arrow_y, current_direction, arrow_attempted
@@ -43,11 +46,14 @@ def reset_arrow():
     arrow_attempted = False
     
     patient_window.switch_to()
-    arrow_label.text = key.symbol_string(current_direction)
-    arrow_label.y = arrow_y
+    arrow_sprite.image = ARROW_IMAGES[current_direction]
+    arrow_sprite.y = arrow_y
 
 def start_game():
     global score, total_attempts, total_hits, streak, time_remaining
+    # Safeguard against stacked clock callbacks
+    pyglet.clock.unschedule(update)
+
     score = 0
     total_attempts = 0
     total_hits = 0
@@ -72,7 +78,6 @@ def stop_game():
     config_screen.doctor_feedback.text = f"Last Session - Pursuits: Targets {total_hits}/{total_attempts} ({accuracy}%)"
 
 def update(dt):
-    # Add total_hits to the global declaration here
     global arrow_y, time_remaining, total_attempts, streak, total_hits 
     
     time_remaining -= dt
@@ -98,7 +103,7 @@ def update(dt):
         reset_arrow() 
         
     patient_window.switch_to()
-    arrow_label.y = arrow_y
+    arrow_sprite.y = arrow_y
     
     minutes = int(time_remaining) // 60
     seconds = int(time_remaining) % 60
@@ -117,7 +122,7 @@ def draw_patient():
     hitbox_rect.draw()
 
     if 130 < arrow_y < 530:
-        arrow_label.draw()
+        arrow_sprite.draw()
 
 def handle_patient_input(symbol):
     global score, total_attempts, total_hits, streak, arrow_attempted
