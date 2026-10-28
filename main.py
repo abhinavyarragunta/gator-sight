@@ -28,9 +28,11 @@ def on_key_press(symbol, modifiers):
     if GameState.current_mode == "CONFIG":
         config_screen.handle_doctor_input(symbol)
         
-        # Trigger the engine clock if Pursuits was selected
+        # Trigger the engine clock for whichever mode was selected
         if GameState.current_mode == "PURSUITS":
             pursuits.start_game()
+        elif GameState.current_mode == "SACCADES":
+            saccades.start_game() 
             
     elif symbol == pyglet.window.key.ESCAPE:
         pyglet.app.exit()
