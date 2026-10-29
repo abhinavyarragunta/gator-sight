@@ -1,30 +1,82 @@
 import pyglet
 from pyglet.window import key
 import random
+import math
 from src.ui.displays import GameState, doctor_window, patient_window
 from src.ui import config_screen
 from src.engine.arrows import load_arrow_images
 
+
+# ---------- Aesthetics ---------- NOTEEE 10/28: make sure to add install font on READ.ME
+FONT = "Pixelify Sans"          # install this font on the PC; can be found under "/src/assets/fonts/Pixelify Sans.ttf" and click install!
+NAVY = (0, 0, 52)
+PURPLE = (118, 10, 122)
+CARD_FILL = (6, 6, 60)
+BORDER = (91, 111, 181)
+MAGENTA = (255, 43, 214)
+BOX_FILL = (40, 40, 100)
+WHITE = (255, 255, 255, 255)
+MUTED = (201, 207, 252, 255)
+GOOD = (124, 255, 178, 255)
+BAD = (255, 107, 138, 255)
+
 doctor_window.switch_to()
-doc_label = pyglet.text.Label('Saccades Mode Active - Monitoring Patient', x=400, y=300, anchor_x='center')
+# 10/28/26: edited it so it's centered now, based off the new dimensions
+doc_label = pyglet.text.Label('Saccades Mode Active - Monitoring Patient', font_size=16,
+                              x=640, y=360, anchor_x='center')
 
 patient_window.switch_to()
-patient_label = pyglet.text.Label('Saccades: Match the arrow in the box! (Esc to quit)',
-                                  x=400, y=550, anchor_x='center')
-feedback_label = pyglet.text.Label('', x=400, y=100, anchor_x='center')
+# 10/28/26: grouped bg gradient + 4 stat cards in one batch so they draw in one call
+hud_batch = pyglet.graphics.Batch()
+bg_group = pyglet.graphics.Group(order=0)
+card_group = pyglet.graphics.Group(order=1)
 
-score_label = pyglet.text.Label('Score: 0', font_size=16, x=50, y=500, anchor_x='left')
-streak_label = pyglet.text.Label('Streak: 0', font_size=16, x=50, y=450, anchor_x='left')
-accuracy_label = pyglet.text.Label('Accuracy: 0%', font_size=16, x=750, y=450, anchor_x='right')
-timer_label = pyglet.text.Label('Time: 60', font_size=18, x=750, y=500, anchor_x='right')
-reaction_label = pyglet.text.Label('Avg Reaction: --', font_size=16, x=750, y=400, anchor_x='right')
+# creating the bg gradient
+STRIPS = 72
+strip_height = 720 / STRIPS
+background = []
+for i in range(STRIPS):
+    from_top = 1 - (i + 0.5) / STRIPS
+    blend = max(0.0, (from_top - 0.30) / 0.70)      # top 30% stays navy, then fades to purple
+    color = tuple(int(a + (b - a) * blend) for a, b in zip(NAVY, PURPLE))
+    background.append(pyglet.shapes.Rectangle(0, int(i * strip_height), 1280, math.ceil(strip_height) + 1,
+                                              color=color, batch=hud_batch, group=bg_group))
+
+# creating the stat cards
+CARD_W, CARD_H = 208, 150
+CARD_POSITIONS = {"Score": (48, 434), "Streak": (48, 264), "Accuracy": (1024, 434), "Level": (1024, 264)}
+cards = []
+card_titles = []
+for title, (cx, cy) in CARD_POSITIONS.items():
+    cards.append(pyglet.shapes.BorderedRectangle(cx, cy, CARD_W, CARD_H, border=3, color=CARD_FILL,
+                                                 border_color=BORDER, batch=hud_batch, group=card_group))
+    card_titles.append(pyglet.text.Label(title, font_size=11, weight="bold", x=cx + 20, y=cy + CARD_H - 16,
+                                     anchor_y='top', color=MUTED))
+
+logo_label = pyglet.text.Label('GatorSight', font_name=FONT, font_size=34, x=48, y=674, anchor_y='top', color=WHITE)
+subtitle_label = pyglet.text.Label('Saccades, Normal Display', font_size=11, weight="bold", x=50, y=614,
+                                   anchor_y='top', color=MUTED)
+timer_label = pyglet.text.Label('1:00', font_name=FONT, font_size=32, x=1232, y=674,
+                                anchor_x='right', anchor_y='top', color=WHITE)
+hint_label = pyglet.text.Label('Press Esc to end the session', font_size=11, weight="bold", x=1232, y=614,
+                               anchor_x='right', anchor_y='top', color=MUTED)
+
+# big numbers inside the cards
+score_label = pyglet.text.Label('0', font_name=FONT, font_size=33, x=68, y=462, color=WHITE)
+streak_label = pyglet.text.Label('0', font_name=FONT, font_size=33, x=68, y=292, color=WHITE)
+accuracy_label = pyglet.text.Label('0%', font_name=FONT, font_size=33, x=1044, y=462, color=WHITE)
+level_label = pyglet.text.Label('1', font_name=FONT, font_size=33, x=1044, y=292, color=WHITE)
+
+feedback_label = pyglet.text.Label('', font_size=15, weight="bold", x=640, y=34, anchor_x='center', anchor_y='center')
+reaction_label = pyglet.text.Label('Avg Reaction: --', font_size=11, weight="bold", x=1232, y=34,
+                                   anchor_x='right', anchor_y='center', color=MUTED)
 
 # Gameplay and Timer variables
-LEFT_BOX_X = 200
-RIGHT_BOX_X = 600
-BOX_Y = 300
-BOX_SIZE = 100
-ARROW_SCALE = 0.6  # 128px images drawn at ~77px to fit inside the 100px boxes
+LEFT_BOX_X = 380
+RIGHT_BOX_X = 900
+BOX_Y = 327
+BOX_SIZE = 140
+ARROW_SCALE = 0.9      # 128px images drawn at ~115px to fit inside the 140px boxes
 TARGET_TIMEOUT = 2.0   # Seconds the arrow stays visible before counting as a miss
 GAP_DURATION = 0.5     # Seconds of blank screen between targets
 
@@ -45,22 +97,37 @@ current_direction = key.UP
 
 patient_window.switch_to()
 ARROW_IMAGES = load_arrow_images()
-left_box = pyglet.shapes.Rectangle(x=LEFT_BOX_X - BOX_SIZE // 2, y=BOX_Y - BOX_SIZE // 2,
-                                   width=BOX_SIZE, height=BOX_SIZE, color=(100, 100, 100))
-right_box = pyglet.shapes.Rectangle(x=RIGHT_BOX_X - BOX_SIZE // 2, y=BOX_Y - BOX_SIZE // 2,
-                                    width=BOX_SIZE, height=BOX_SIZE, color=(100, 100, 100))
+left_box = pyglet.shapes.BorderedRectangle(LEFT_BOX_X - BOX_SIZE // 2, BOX_Y - BOX_SIZE // 2, BOX_SIZE, BOX_SIZE,
+                                           border=4, color=BOX_FILL, border_color=BORDER)
+right_box = pyglet.shapes.BorderedRectangle(RIGHT_BOX_X - BOX_SIZE // 2, BOX_Y - BOX_SIZE // 2, BOX_SIZE, BOX_SIZE,
+                                            border=4, color=BOX_FILL, border_color=BORDER)
 arrow_sprite = pyglet.sprite.Sprite(ARROW_IMAGES[key.UP], x=LEFT_BOX_X, y=BOX_Y)
 arrow_sprite.scale = ARROW_SCALE
 
 def get_average_reaction():
     return sum(reaction_times) / len(reaction_times) if reaction_times else 0.0
 
+# changed it so that it's easier for the label creation and updating
+def set_timer_text():
+    seconds = max(0, int(math.ceil(time_remaining)))
+    timer_label.text = f"{seconds // 60}:{seconds % 60:02d}"
+
+def set_feedback(text, good):
+    feedback_label.text = text
+    feedback_label.color = GOOD if good else BAD
+
+def highlight_target_box():
+    # The box with the active arrow gets a magenta border
+    left_box.border_color = MAGENTA if (target_visible and target_side == "LEFT") else BORDER
+    right_box.border_color = MAGENTA if (target_visible and target_side == "RIGHT") else BORDER
+
 def update_labels():
     patient_window.switch_to()
     accuracy = int((total_hits / total_attempts) * 100) if total_attempts > 0 else 0
-    score_label.text = f"Score: {score}"
-    streak_label.text = f"Streak: {streak}"
-    accuracy_label.text = f"Accuracy: {accuracy}%"
+    score_label.text = f"{score:,}"
+    streak_label.text = str(streak)
+    accuracy_label.text = f"{accuracy}%"
+    level_label.text = str(1 + total_hits // 10)    # +1 level every 10 hits
     if reaction_times:
         reaction_label.text = f"Avg Reaction: {int(get_average_reaction() * 1000)} ms"
     else:
@@ -77,12 +144,15 @@ def show_next_target():
     patient_window.switch_to()
     arrow_sprite.image = ARROW_IMAGES[current_direction]
     arrow_sprite.x = LEFT_BOX_X if target_side == "LEFT" else RIGHT_BOX_X
+    highlight_target_box()
 
 def end_target():
     # Hide the arrow and begin the blank gap before the next one appears
     global target_visible, gap_elapsed
     target_visible = False
     gap_elapsed = 0.0
+    patient_window.switch_to()
+    highlight_target_box()    
 
 def start_game():
     global score, total_attempts, total_hits, streak, time_remaining, reaction_times, target_side
@@ -101,12 +171,9 @@ def start_game():
     show_next_target()
 
     patient_window.switch_to()
-    feedback_label.text = ""
-    score_label.text = "Score: 0"
-    streak_label.text = "Streak: 0"
-    accuracy_label.text = "Accuracy: 0%"
-    reaction_label.text = "Avg Reaction: --"
-    timer_label.text = "Time: 1:00"
+    set_feedback("", True)
+    update_labels()
+    set_timer_text()
 
     pyglet.clock.schedule_interval(update, 1/60.0)
 
@@ -139,7 +206,7 @@ def update(dt):
             total_attempts += 1
             streak = 0
             patient_window.switch_to()
-            feedback_label.text = "MISS! No input detected!"
+            set_feedback("MISS! No input detected!", False)
             update_labels()
             end_target()
     else:
@@ -148,20 +215,24 @@ def update(dt):
             show_next_target()
 
     patient_window.switch_to()
-    minutes = int(time_remaining) // 60
-    seconds = int(time_remaining) % 60
-    timer_label.text = f"Time: {minutes}:{seconds:02d}"
+    set_timer_text()
 
 def draw_doctor():
     doc_label.draw()
 
 def draw_patient():
-    patient_label.draw()
-    feedback_label.draw()
+    hud_batch.draw()                       # gradient background + 4 cards
+    for label in card_titles:
+        label.draw()
+    logo_label.draw()
+    subtitle_label.draw()
+    timer_label.draw()
+    hint_label.draw()
     score_label.draw()
     streak_label.draw()
     accuracy_label.draw()
-    timer_label.draw()
+    level_label.draw()
+    feedback_label.draw()
     reaction_label.draw()
     left_box.draw()
     right_box.draw()
@@ -195,6 +266,6 @@ def handle_patient_input(symbol):
         else:
             streak = 0
             feedback_label.text = f"MISS! Wrong direction. Expected: {key.symbol_string(current_direction)}"
-
+        
         end_target()
         update_labels()
