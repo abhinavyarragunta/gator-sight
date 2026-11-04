@@ -1,47 +1,151 @@
+import math
 import pyglet
 from pyglet.window import key
 import random
 from src.ui.displays import GameState, doctor_window, patient_window
 from src.ui import config_screen
 from src.engine.arrows import load_arrow_images
+from src.engine.saccades import (FONT, NAVY, PURPLE, CARD_FILL, BORDER, MAGENTA, BOX_FILL, WHITE, MUTED,
+                                 GOOD, BAD, CARD_W, CARD_H, CARD_POSITIONS)
+
+# ---------- Aesthetics ---------- NOTEEE 10/28: make sure to add install font on READ.ME
+FONT = "Pixelify Sans"          # install this font on the PC; can be found under "/src/assets/fonts/Pixelify Sans.ttf" and click install!
+NAVY = (0, 0, 52)
+PURPLE = (118, 10, 122)
+CARD_FILL = (6, 6, 60)
+BORDER = (91, 111, 181)
+MAGENTA = (255, 43, 214)
+BOX_FILL = (40, 40, 100)
+WHITE = (255, 255, 255, 255)
+MUTED = (201, 207, 252, 255)
+GOOD = (124, 255, 178, 255)
+BAD = (255, 107, 138, 255)
 
 doctor_window.switch_to()
-doc_label = pyglet.text.Label('Pursuits Mode Active - Monitoring Patient', x=400, y=300, anchor_x='center')
 
-patient_window.switch_to()
-patient_label = pyglet.text.Label('Pursuits: Match direction when arrow hits the box! (Esc to quit)', 
-                                  x=400, y=550, anchor_x='center')
-feedback_label = pyglet.text.Label('', x=400, y=100, anchor_x='center')
+patient_window.switch_to() 
 
-score_label = pyglet.text.Label('Score: 0', font_size=16, x=50, y=500, anchor_x='left')
-streak_label = pyglet.text.Label('Streak: 0', font_size=16, x=50, y=450, anchor_x='left')
-accuracy_label = pyglet.text.Label('Accuracy: 0%', font_size=16, x=750, y=450, anchor_x='right')
-timer_label = pyglet.text.Label('Time: 60', font_size=18, x=750, y=500, anchor_x='right')
+# Batch and Groups
+hud_batch = pyglet.graphics.Batch()
+bg_group = pyglet.graphics.Group(order=0)
+card_group = pyglet.graphics.Group(order=1)
 
-# Gameplay and Timer variables
-hitbox_y = 450
+# Background Gradient
+STRIPS = 72
+strip_height = 720 / STRIPS
+background = []
+for i in range(STRIPS):
+    from_top = 1 - (i + 0.5) / STRIPS
+    blend = max(0.0, (from_top - 0.30) / 0.70)
+    color = tuple(int(a + (b - a) * blend) for a, b in zip(NAVY, PURPLE))
+    background.append(pyglet.shapes.Rectangle(
+        0, int(i * strip_height), 1280, math.ceil(strip_height) + 1,
+        color=color, batch=hud_batch, group=bg_group
+    ))
+
+# Stat Cards
+cards = []
+card_titles = []
+for title, (cx, cy) in CARD_POSITIONS.items():
+    cards.append(pyglet.shapes.BorderedRectangle(
+        cx, cy, CARD_W, CARD_H, border=3, color=CARD_FILL,
+        border_color=BORDER, batch=hud_batch, group=card_group
+    ))
+    card_titles.append(pyglet.text.Label(
+        title, font_size=11, weight="bold", x=cx + 20, y=cy + CARD_H - 16,
+        anchor_y='top', color=MUTED
+    ))
+
+# Pursuits Track Lane
+LANE_X = 640
+LANE_W = 160
+LANE_BOTTOM = 96
+LANE_TOP = 636
+lane = pyglet.shapes.BorderedRectangle(
+    LANE_X - LANE_W // 2, LANE_BOTTOM, LANE_W, LANE_TOP - LANE_BOTTOM,
+    border=2, color=CARD_FILL, border_color=BORDER,
+    batch=hud_batch, group=card_group
+)
+
+# Static & State Labels
+logo_label = pyglet.text.Label('GatorSight', font_name=FONT, font_size=34, x=48, y=674, anchor_y='top', color=WHITE)
+subtitle_label = pyglet.text.Label('Pursuits, Normal Display', font_size=11, weight="bold", x=50, y=614, anchor_y='top', color=MUTED)
+timer_label = pyglet.text.Label('1:00', font_name=FONT, font_size=32, x=1232, y=674, anchor_x='right', anchor_y='top', color=WHITE)
+hint_label = pyglet.text.Label('Press Esc to end the session', font_size=11, weight="bold", x=1232, y=614, anchor_x='right', anchor_y='top', color=MUTED)
+
+score_label = pyglet.text.Label('0', font_name=FONT, font_size=33, x=68, y=462, color=WHITE)
+streak_label = pyglet.text.Label('0', font_name=FONT, font_size=33, x=68, y=292, color=WHITE)
+accuracy_label = pyglet.text.Label('0%', font_name=FONT, font_size=33, x=1044, y=462, color=WHITE)
+level_label = pyglet.text.Label('1', font_name=FONT, font_size=33, x=1044, y=292, color=WHITE)
+
+feedback_label = pyglet.text.Label('', font_size=15, weight="bold", x=640, y=34, anchor_x='center', anchor_y='center')
+reaction_label = pyglet.text.Label('Avg Timing Error: --', font_size=11, weight="bold", x=1232, y=34, anchor_x='right', anchor_y='center', color=MUTED)
+
+# Gameplay & Hitbox Variables
+HITBOX_X = 640
+HITBOX_Y = 440
+BOX_SIZE = 140
+HIT_WINDOW = 40
+ARROW_EXIT_Y = 650
 arrow_y = 0
 arrow_speed = 400 
-ARROW_SCALE = 0.5  # 128px images drawn at 64px to fit the 60px hitbox
+ARROW_SCALE = 0.9
+
 score = 0
 streak = 0
 total_attempts = 0
 total_hits = 0
 time_remaining = 60.0
 arrow_attempted = False
+timing_errors = []
+attempt_log = []
 
 VALID_DIRECTIONS = [key.UP, key.DOWN, key.LEFT, key.RIGHT]
 current_direction = key.UP
 
-patient_window.switch_to()
 ARROW_IMAGES = load_arrow_images()
-hitbox_rect = pyglet.shapes.Rectangle(x=370, y=hitbox_y - 30, width=60, height=60, color=(100, 100, 100))
-arrow_sprite = pyglet.sprite.Sprite(ARROW_IMAGES[key.UP], x=400, y=arrow_y)
+hitbox_rect = pyglet.shapes.BorderedRectangle(
+    HITBOX_X - BOX_SIZE // 2, HITBOX_Y - BOX_SIZE // 2, BOX_SIZE, BOX_SIZE,
+    border=4, color=BOX_FILL, border_color=BORDER
+)
+arrow_sprite = pyglet.sprite.Sprite(ARROW_IMAGES[key.UP], x=HITBOX_X, y=arrow_y)
 arrow_sprite.scale = ARROW_SCALE
+
+ARROW_HALF = ARROW_IMAGES[key.UP].height * ARROW_SCALE / 2
+VISIBLE_MIN_Y = LANE_BOTTOM + ARROW_HALF
+VISIBLE_MAX_Y = LANE_TOP - ARROW_HALF
+
+
+def get_average_timing_error():
+    return sum(timing_errors) / len(timing_errors) if timing_errors else 0.0
+
+def set_timer_text():
+    seconds = max(0, int(math.ceil(time_remaining)))
+    timer_label.text = f"{seconds // 60}:{seconds % 60:02d}"
+
+def set_feedback(text, good):
+    feedback_label.text = text
+    feedback_label.color = GOOD if good else BAD
+
+def highlight_hitbox():
+    in_window = abs(arrow_y - HITBOX_Y) < HIT_WINDOW and not arrow_attempted
+    hitbox_rect.border_color = MAGENTA if in_window else BORDER
+
+def update_labels():
+    patient_window.switch_to()
+    accuracy = int((total_hits / total_attempts) * 100) if total_attempts > 0 else 0
+    score_label.text = f"{score:,}"
+    streak_label.text = str(streak)
+    accuracy_label.text = f"{accuracy}%"
+    level_label.text = str(1 + total_hits // 10)    # +1 level every 10 hits
+    if timing_errors:
+        reaction_label.text = f"Avg Timing Error: {int(get_average_timing_error() * 1000)} ms"
+    else:
+        reaction_label.text = "Avg Timing Error: --"
 
 def reset_arrow():
     global arrow_y, current_direction, arrow_attempted
-    arrow_y = -50  
+    arrow_y = -50 
     current_direction = random.choice(VALID_DIRECTIONS)
     arrow_attempted = False
     
@@ -50,8 +154,7 @@ def reset_arrow():
     arrow_sprite.y = arrow_y
 
 def start_game():
-    global score, total_attempts, total_hits, streak, time_remaining
-    # Safeguard against stacked clock callbacks
+    global score, total_attempts, total_hits, streak, time_remaining, timing_errors, attempt_log
     pyglet.clock.unschedule(update)
 
     score = 0
@@ -59,14 +162,15 @@ def start_game():
     total_hits = 0
     streak = 0
     time_remaining = 60.0
+    timing_errors = []
+    attempt_log = []
     reset_arrow()
     
     patient_window.switch_to()
-    feedback_label.text = ""
-    score_label.text = "Score: 0"
-    streak_label.text = "Streak: 0"
-    accuracy_label.text = "Accuracy: 0%"
-    timer_label.text = "Time: 1:00"
+    set_feedback("", True)
+    update_labels()
+    set_timer_text()
+    highlight_hitbox()
     
     pyglet.clock.schedule_interval(update, 1/60.0)
 
@@ -75,7 +179,10 @@ def stop_game():
     
     doctor_window.switch_to()
     accuracy = int((total_hits / total_attempts) * 100) if total_attempts > 0 else 0
-    config_screen.doctor_feedback.text = f"Last Session - Pursuits: Targets {total_hits}/{total_attempts} ({accuracy}%)"
+    timing_text = f", Avg Timing Error {int(get_average_timing_error() * 1000)} ms" if timing_errors else ""
+    config_screen.doctor_feedback.text = (
+        f"Last Session - Pursuits: Targets {total_hits}/{total_attempts} ({accuracy}%){timing_text}"
+    )
 
 def update(dt):
     global arrow_y, time_remaining, total_attempts, streak, total_hits 
@@ -88,77 +195,89 @@ def update(dt):
         
     arrow_y += arrow_speed * dt
     
-    if arrow_y > 650:
+    if arrow_y > ARROW_EXIT_Y:
         if not arrow_attempted:
-            patient_window.switch_to()
             total_attempts += 1
             streak = 0
-            feedback_label.text = "MISS! No input detected!"
+            attempt_log.append(False)
+            patient_window.switch_to()
+            set_feedback("MISS! No input detected!", False)
+            update_labels()
             
-            # Recalculate and update the accuracy label
-            accuracy = int((total_hits / total_attempts) * 100) if total_attempts > 0 else 0
-            accuracy_label.text = f"Accuracy: {accuracy}%"
-            streak_label.text = f"Streak: {streak}"
-            
-        reset_arrow() 
+        reset_arrow()
         
     patient_window.switch_to()
     arrow_sprite.y = arrow_y
-    
-    minutes = int(time_remaining) // 60
-    seconds = int(time_remaining) % 60
-    timer_label.text = f"Time: {minutes}:{seconds:02d}"
+    highlight_hitbox()
+    set_timer_text()
 
 def draw_doctor():
-    doc_label.draw()
+    config_screen.draw_live_doctor(
+        mode_name="Pursuits",
+        score=score,
+        streak=streak,
+        total_hits=total_hits,
+        total_attempts=total_attempts,
+        level=1 + total_hits // 10,
+        time_remaining=time_remaining,
+        last_event=feedback_label.text,
+        attempt_log=attempt_log,
+        avg_label="Avg Timing Error",
+        avg_text=f"{int(get_average_timing_error() * 1000)} ms" if timing_errors else "--",
+    )
 
 def draw_patient():
-    patient_label.draw()
-    feedback_label.draw()
+    hud_batch.draw()
+    for label in card_titles:
+        label.draw()
+    logo_label.draw()
+    subtitle_label.draw()
+    timer_label.draw()
+    hint_label.draw()
     score_label.draw()
     streak_label.draw()
     accuracy_label.draw()
-    timer_label.draw()
+    level_label.draw()
+    feedback_label.draw()
+    reaction_label.draw()
     hitbox_rect.draw()
 
-    if 130 < arrow_y < 530:
+    if VISIBLE_MIN_Y < arrow_y < VISIBLE_MAX_Y:
         arrow_sprite.draw()
 
 def handle_patient_input(symbol):
     global score, total_attempts, total_hits, streak, arrow_attempted
     patient_window.switch_to()
-    
+
     if symbol == key.ESCAPE:
         GameState.current_mode = "CONFIG"
         stop_game()
         return
-        
-    # Only process the input if the current arrow hasn't been attempted yet
+
     if symbol in VALID_DIRECTIONS and not arrow_attempted:
         arrow_attempted = True
         total_attempts += 1
-        
-        timing_correct = abs(arrow_y - hitbox_y) < 40 
+
+        timing_correct = abs(arrow_y - HITBOX_Y) < HIT_WINDOW
         direction_correct = (symbol == current_direction)
-        
-        if timing_correct and direction_correct: 
+
+        if timing_correct and direction_correct:
             streak += 1
             total_hits += 1
-            
+            timing_errors.append(abs(arrow_y - HITBOX_Y) / arrow_speed)
+            attempt_log.append(True)
+
             points_earned = 100 + (25 * (streak // 5))
             score += points_earned
-            
-            feedback_label.text = f"HIT! Perfect {key.symbol_string(symbol)}! (+{points_earned})"
-            reset_arrow()  
+
+            set_feedback(f"HIT! Perfect {key.symbol_string(symbol)}! (+{points_earned})", True)
+            reset_arrow()
         else:
             streak = 0
+            attempt_log.append(False)
             if not timing_correct:
-                feedback_label.text = "MISS! Bad timing!"
+                set_feedback("MISS! Bad timing!", False)
             elif not direction_correct:
-                feedback_label.text = f"MISS! Wrong direction. Expected: {key.symbol_string(current_direction)}"
-                
-        accuracy = int((total_hits / total_attempts) * 100) if total_attempts > 0 else 0
-        
-        score_label.text = f"Score: {score}"
-        streak_label.text = f"Streak: {streak}"
-        accuracy_label.text = f"Accuracy: {accuracy}%"
+                set_feedback(f"MISS! Wrong direction. Expected: {key.symbol_string(current_direction)}", False)
+
+        update_labels()
