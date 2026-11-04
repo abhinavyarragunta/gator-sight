@@ -22,8 +22,8 @@ BAD = (255, 107, 138, 255)
 
 doctor_window.switch_to()
 # 10/28/26: edited it so it's centered now, based off the new dimensions
-doc_label = pyglet.text.Label('Saccades Mode Active - Monitoring Patient', font_size=16,
-                              x=640, y=360, anchor_x='center')
+# doc_label = pyglet.text.Label('Saccades Mode Active - Monitoring Patient', font_size=16,
+#                               x=640, y=360, anchor_x='center')
 
 patient_window.switch_to()
 # 10/28/26: grouped bg gradient + 4 stat cards in one batch so they draw in one call
@@ -86,6 +86,7 @@ total_attempts = 0
 total_hits = 0
 time_remaining = 60.0
 reaction_times = []
+attempt_log = [] 
 
 target_side = "LEFT"
 target_visible = False
@@ -205,6 +206,7 @@ def update(dt):
             # Arrow expired with no input
             total_attempts += 1
             streak = 0
+            attempt_log.append(False)
             patient_window.switch_to()
             set_feedback("MISS! No input detected!", False)
             update_labels()
@@ -218,7 +220,20 @@ def update(dt):
     set_timer_text()
 
 def draw_doctor():
-    doc_label.draw()
+   # draws live dashboard for doctor window
+   config_screen.draw_live_doctor(
+        mode_name="Saccades",
+        score=score,
+        streak=streak,
+        total_hits=total_hits,
+        total_attempts=total_attempts,
+        level=1 + total_hits // 10,              # same level rule as update_labels()
+        time_remaining=time_remaining,
+        last_event=feedback_label.text,
+        attempt_log=attempt_log,
+        avg_label="Avg Reaction",
+        avg_text=f"{int(get_average_reaction() * 1000)} ms" if reaction_times else "--",
+    )
 
 def draw_patient():
     hud_batch.draw()                       # gradient background + 4 cards
@@ -257,7 +272,7 @@ def handle_patient_input(symbol):
             streak += 1
             total_hits += 1
             reaction_times.append(target_elapsed)
-
+            attempt_log.append(True)
             points_earned = 100 + (25 * (streak // 5))
             score += points_earned
 
@@ -265,6 +280,7 @@ def handle_patient_input(symbol):
                                    f"(+{points_earned})")
         else:
             streak = 0
+            attempt_log.append(False) 
             feedback_label.text = f"MISS! Wrong direction. Expected: {key.symbol_string(current_direction)}"
         
         end_target()
