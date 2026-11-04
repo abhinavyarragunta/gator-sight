@@ -5,6 +5,8 @@ import math
 from src.ui.displays import GameState, doctor_window, patient_window
 from src.ui import config_screen
 from src.engine.arrows import load_arrow_images
+from src.engine import input_manager
+from src.storage import session_store
 
 
 # ---------- Aesthetics ---------- NOTEEE 10/28: make sure to add install font on READ.ME
@@ -187,9 +189,25 @@ def stop_game():
         reaction_text = f", Avg Reaction {int(get_average_reaction() * 1000)} ms"
     else:
         reaction_text = ""
-    config_screen.doctor_feedback.text = (
-        f"Last Session - Saccades: Targets {total_hits}/{total_attempts} ({accuracy}%){reaction_text}"
-    )
+    summary = f"Targets {total_hits}/{total_attempts} ({accuracy}%){reaction_text}"
+
+    if total_attempts > 0:
+        session_store.save_session({
+            "mode": "SACCADES",
+            "input_mode": input_manager.mode,
+            "duration_seconds": round(60.0 - max(0.0, time_remaining), 1),
+            "score": score,
+            "streak": streak,
+            "level": 1 + total_hits // 10,
+            "total_attempts": total_attempts,
+            "total_hits": total_hits,
+            "accuracy_percent": accuracy,
+            "avg_metric_label": "Avg Reaction",
+            "avg_metric_value_ms": int(get_average_reaction() * 1000) if reaction_times else None,
+            "summary_text": summary,
+            "attempt_log": attempt_log,
+        })
+    config_screen.load_last_session()
 
 def update(dt):
     global time_remaining, total_attempts, streak, target_elapsed, gap_elapsed

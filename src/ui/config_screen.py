@@ -3,6 +3,7 @@ import pyglet
 from pyglet.window import key
 from src.ui.displays import GameState, doctor_window, patient_window
 from src.engine import input_manager
+from src.storage import session_store
 
 
 # Install the keyboard / finger pad filter and serial poller on the patient window (once)
@@ -126,6 +127,20 @@ doctor_feedback = pyglet.text.Label('', font_size=14, x=LAST_X + 20, y=INFO_Y + 
 last_placeholder = pyglet.text.Label('No sessions yet. Pick a session above to begin.', font_size=14,
                                      x=LAST_X + 20, y=INFO_Y + INFO_H - 56, anchor_y='top',
                                      multiline=True, width=INFO_W - 40, color=MUTED)
+
+def load_last_session():
+    """Load the most recent session from persistent JSON storage into the dashboard."""
+    last = session_store.get_last_session()
+    if last:
+        mode_name = last.get("mode", "Session").capitalize()
+        summary = last.get("summary_text", "")
+        date_str = last.get("date_formatted", "")
+        doctor_feedback.text = f"{mode_name} ({date_str}):\n{summary}"
+    else:
+        doctor_feedback.text = ""
+
+# Load persistent session record on startup
+load_last_session()
 
 # warning bow for when dr tries to start session while fingerpad is calibrating/disconnected
 doctor_alert = pyglet.text.Label('', font_size=15, weight="bold", x=640, y=40, anchor_x='center',

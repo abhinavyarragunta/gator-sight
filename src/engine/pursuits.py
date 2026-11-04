@@ -5,6 +5,8 @@ import random
 from src.ui.displays import GameState, doctor_window, patient_window
 from src.ui import config_screen
 from src.engine.arrows import load_arrow_images
+from src.engine import input_manager
+from src.storage import session_store
 from src.engine.saccades import (FONT, NAVY, PURPLE, CARD_FILL, BORDER, MAGENTA, BOX_FILL, WHITE, MUTED,
                                  GOOD, BAD, CARD_W, CARD_H, CARD_POSITIONS)
 
@@ -180,9 +182,25 @@ def stop_game():
     doctor_window.switch_to()
     accuracy = int((total_hits / total_attempts) * 100) if total_attempts > 0 else 0
     timing_text = f", Avg Timing Error {int(get_average_timing_error() * 1000)} ms" if timing_errors else ""
-    config_screen.doctor_feedback.text = (
-        f"Last Session - Pursuits: Targets {total_hits}/{total_attempts} ({accuracy}%){timing_text}"
-    )
+    summary = f"Targets {total_hits}/{total_attempts} ({accuracy}%){timing_text}"
+
+    if total_attempts > 0:
+        session_store.save_session({
+            "mode": "PURSUITS",
+            "input_mode": input_manager.mode,
+            "duration_seconds": round(60.0 - max(0.0, time_remaining), 1),
+            "score": score,
+            "streak": streak,
+            "level": 1 + total_hits // 10,
+            "total_attempts": total_attempts,
+            "total_hits": total_hits,
+            "accuracy_percent": accuracy,
+            "avg_metric_label": "Avg Timing Error",
+            "avg_metric_value_ms": int(get_average_timing_error() * 1000) if timing_errors else None,
+            "summary_text": summary,
+            "attempt_log": attempt_log,
+        })
+    config_screen.load_last_session()
 
 def update(dt):
     global arrow_y, time_remaining, total_attempts, streak, total_hits 

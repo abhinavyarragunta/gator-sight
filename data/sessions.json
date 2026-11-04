@@ -1,0 +1,41 @@
+[
+  {
+    "session_id": "saccades_20261104_110810",
+    "timestamp": "2026-11-04T11:08:10.208161",
+    "date_formatted": "11/04/2026 11:08 AM",
+    "mode": "SACCADES",
+    "input_mode": "KEYBOARD",
+    "duration_seconds": 60.0,
+    "score": 1500,
+    "streak": 5,
+    "level": 2,
+    "total_attempts": 20,
+    "total_hits": 18,
+    "accuracy_percent": 90,
+    "avg_metric_label": "Avg Reaction",
+    "avg_metric_value_ms": 312,
+    "summary_text": "Targets 18/20 (90%), Avg Reaction 312 ms",
+    "attempt_log": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  }
+]
